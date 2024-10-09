@@ -239,7 +239,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
     let mut collecting_array_type = false;
     let mut array_type = String::new();
 
-    let mut first_bound = 0;
+    let mut range_left_bound = 0;
 
     while (state != State::Error) && (state != State::Finish) {
         match tokens.get(i) {
@@ -362,7 +362,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             }
 
                             if let Ok(value) = word.parse::<i16>() {
-                                first_bound = value;
+                                range_left_bound = value;
                             } else {
                                 unreachable!()
                             }
@@ -393,7 +393,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             }
 
                             if let Ok(value) = word.parse::<i16>() {
-                                if value <= first_bound {
+                                if value <= range_left_bound {
                                     return Err(LexerError::semantic_error(
                                         tok.position,
                                         format!("first bound of range should be less than second")
@@ -434,7 +434,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             }
 
                             if let Ok(value) = word.parse::<i16>() {
-                                first_bound = value;
+                                range_left_bound = value;
                             } else {
                                 unreachable!()
                             }
@@ -464,7 +464,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             }
 
                             if let Ok(value) = word.parse::<i16>() {
-                                if value <= first_bound {
+                                if value <= range_left_bound {
                                     return Err(LexerError::semantic_error(
                                         tok.position,
                                         format!("first bound of range should be less than second")
