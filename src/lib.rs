@@ -127,6 +127,49 @@ pub fn is_integer(str: &str) -> bool {
     return state == State::Finish && i == str.len() + 1;
 }
 
-pub fn is_identifier(_str: &str) -> bool {
-    return true;
+pub fn is_identifier(str: &str) -> bool {
+    #[derive(Debug, PartialEq)]
+    enum State {
+        Start,
+        Chars,
+        Error,
+        Finish,
+    }
+
+    let mut state = State::Start;
+    let mut i: usize = 0;
+
+    while (state != State::Error) && (state != State::Finish) {
+        match str.chars().nth(i) {
+            Some(ch) => match state {
+                State::Start => {
+                    if ch.is_alphabetic() {
+                        state = State::Chars;
+                    } else {
+                        state = State::Error;
+                        break;
+                    }
+                }
+                State::Chars => {
+                    if ch.is_alphabetic() || ch.is_ascii_digit() {
+                        state = State::Chars;
+                    } else {
+                        state = State::Error;
+                        break;
+                    }
+                }
+                _ => {}
+            },
+            None => {
+                if state == State::Chars {
+                    state = State::Finish;
+                } else {
+                    state = State::Error;
+                }
+            }
+        }
+        i += 1;
+    }
+
+    return state == State::Finish && i == str.len() + 1;
 }
