@@ -1,8 +1,8 @@
 use analyzer::{analyze, tokenize};
 
 fn main() {
-    let content: String = String::from("VAR A,K:byte, D17,E7: WORD").to_lowercase();
-    // Actual: VAR A,K:ARRAY[2:10,10:40] OF BYTE, D17,E7 : WORD;
+    let content: String =
+        String::from("VAR A,K:ARRAY[2:10,10:40] OF BYTE, D17,E7 : WORD;").to_lowercase();
 
     println!("Parsing: '{}'", content);
 

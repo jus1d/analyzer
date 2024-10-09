@@ -255,7 +255,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if is_simple_type(&tok.word) {
                             state = State::SimpleType;
                         } else if tok.word == "array" {
-                            todo!()
+                            state = State::Array;
                         } else {
                             return Err(LexerError::new(
                                 tok.position,
@@ -277,6 +277,157 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                                 tok.position,
                                 format!(
                                     "unexpected token: `{}` should be either comma or semicolon",
+                                    tok.word
+                                )
+                                .as_str(),
+                            ));
+                        }
+                    }
+                    State::Array => {
+                        if tok.word == "[" {
+                            state = State::RangesStart;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!("unexpected token: expected `[`, found '{}'", tok.word)
+                                    .as_str(),
+                            ));
+                        }
+                    }
+                    State::RangesStart => {
+                        if tok.word == "]" {
+                            state = State::RangesEnd;
+                        } else if is_integer(&tok.word) {
+                            state = State::FirstRangeBeginValue;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!(
+                                    "unexpected token: expected `]` or integer constant, found '{}'",
+                                    tok.word
+                                )
+                                .as_str(),
+                            ));
+                        }
+                    }
+                    State::FirstRangeBeginValue => {
+                        if tok.word == ":" {
+                            state = State::FirstRangeDelimiter;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!("unexpected token: expected `:`, found '{}'", tok.word)
+                                    .as_str(),
+                            ));
+                        }
+                    }
+                    State::FirstRangeDelimiter => {
+                        if is_integer(&tok.word) {
+                            state = State::FirstRangeEndValue;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!(
+                                    "unexpected token: expected integer constant, found '{}'",
+                                    tok.word
+                                )
+                                .as_str(),
+                            ));
+                        }
+                    }
+                    State::FirstRangeEndValue => {
+                        if tok.word == "," {
+                            state = State::RangesDelimiter;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!("unexpected token: expected `,`, found '{}'", tok.word)
+                                    .as_str(),
+                            ));
+                        }
+                    }
+                    State::RangesDelimiter => {
+                        if is_integer(&tok.word) {
+                            state = State::SecondRangeBeginValue;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!(
+                                    "unexpected token: expected integer constant, found '{}'",
+                                    tok.word
+                                )
+                                .as_str(),
+                            ));
+                        }
+                    }
+                    State::SecondRangeBeginValue => {
+                        if tok.word == ":" {
+                            state = State::SecondRangeDelimiter;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!("unexpected token: expected `:`, found '{}'", tok.word)
+                                    .as_str(),
+                            ));
+                        }
+                    }
+                    State::SecondRangeDelimiter => {
+                        if is_integer(&tok.word) {
+                            state = State::SecondRangeEndValue;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!(
+                                    "unexpected token: expected integer constant, found '{}'",
+                                    tok.word
+                                )
+                                .as_str(),
+                            ));
+                        }
+                    }
+                    State::SecondRangeEndValue => {
+                        if tok.word == "]" {
+                            state = State::RangesEnd;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!("unexpected token: expected `]`, found '{}'", tok.word)
+                                    .as_str(),
+                            ));
+                        }
+                    }
+                    State::RangesEnd => {
+                        if tok.word == "of" {
+                            state = State::Of;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!("unexpected token: expected `of`, found '{}'", tok.word)
+                                    .as_str(),
+                            ));
+                        }
+                    }
+                    State::Of => {
+                        if is_simple_type(&tok.word) {
+                            state = State::ArrayType;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!("unexpected token: expected on of simple types (byte, integer, real, etc), found '{}'", tok.word)
+                                    .as_str(),
+                            ));
+                        }
+                    }
+                    State::ArrayType => {
+                        if tok.word == ";" {
+                            state = State::Finish;
+                        } else if tok.word == "," {
+                            state = State::Definition;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!(
+                                    "unexpected token: expected `:` or `,`, found '{}'",
                                     tok.word
                                 )
                                 .as_str(),
