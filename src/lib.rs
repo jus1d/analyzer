@@ -1,7 +1,4 @@
-use std::{
-    fmt::{self, format},
-    mem,
-};
+use std::fmt;
 
 #[derive(Debug)]
 pub struct LexerError {
