@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::future::Pending;
 
 #[derive(Debug)]
 pub struct LexerError {
@@ -233,7 +232,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
     }
 
     let mut identifiers: HashMap<String, String> = HashMap::new();
-    let mut pendingIdentifiers: HashSet<String> = HashSet::new();
+    let mut pending_identifiers: HashSet<String> = HashSet::new();
     let mut state = State::Start;
     let mut i: usize = 0;
 
@@ -265,7 +264,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             ));
                         }
 
-                        if !pendingIdentifiers.insert(String::from(&tok.word))
+                        if !pending_identifiers.insert(String::from(&tok.word))
                             || identifiers.contains_key(&tok.word)
                         {
                             return Err(LexerError::semantic_error(
@@ -296,19 +295,19 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                 }
                 State::Type => {
                     if is_simple_type(&tok.word) {
-                        for identifier in pendingIdentifiers.iter() {
+                        for identifier in pending_identifiers.iter() {
                             identifiers.insert(identifier.clone(), tok.word.clone());
                         }
 
-                        pendingIdentifiers = HashSet::new();
+                        pending_identifiers = HashSet::new();
 
                         state = State::SimpleType;
                     } else if tok.word == "array" {
-                        for identifier in pendingIdentifiers.iter() {
+                        for identifier in pending_identifiers.iter() {
                             identifiers.insert(identifier.clone(), tok.word.clone());
                         }
 
-                        pendingIdentifiers = HashSet::new();
+                        pending_identifiers = HashSet::new();
 
                         state = State::Array;
                     } else {
