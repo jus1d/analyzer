@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt;
 
 #[derive(Debug)]
@@ -230,6 +231,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
         Finish,
     }
 
+    let mut identifiers: HashSet<String> = HashSet::new();
     let mut state = State::Start;
     let mut i: usize = 0;
 
@@ -258,6 +260,13 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             return Err(LexerError::semantic_error(
                                 tok.position,
                                 "identifier can't reserved word: var, real, double, etc.",
+                            ));
+                        }
+
+                        if !identifiers.insert(String::from(&tok.word)) {
+                            return Err(LexerError::semantic_error(
+                                tok.position,
+                                format!("identifier `{}` already taken", tok.word).as_str(),
                             ));
                         }
 
