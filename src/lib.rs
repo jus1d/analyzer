@@ -239,6 +239,8 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
     let mut collecting_array_type = false;
     let mut array_type = String::new();
 
+    let mut first_bound = 0;
+
     while (state != State::Error) && (state != State::Finish) {
         match tokens.get(i) {
             Some(tok) => {
@@ -358,6 +360,13 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             if !is_integer_in_range(word) {
                                 return Err(LexerError::integer_out_of_range(tok.position, word));
                             }
+
+                            if let Ok(value) = word.parse::<i16>() {
+                                first_bound = value;
+                            } else {
+                                unreachable!()
+                            }
+
                             state = State::FirstRangeBeginValue;
                         } else {
                             return Err(LexerError::syntax_error(
@@ -381,6 +390,18 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if is_integer(word) {
                             if !is_integer_in_range(word) {
                                 return Err(LexerError::integer_out_of_range(tok.position, word));
+                            }
+
+                            if let Ok(value) = word.parse::<i16>() {
+                                if value <= first_bound {
+                                    return Err(LexerError::semantic_error(
+                                        tok.position,
+                                        format!("first bound of range should be less than second")
+                                            .as_str(),
+                                    ));
+                                }
+                            } else {
+                                unreachable!()
                             }
 
                             state = State::FirstRangeEndValue;
@@ -412,6 +433,12 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                                 return Err(LexerError::integer_out_of_range(tok.position, word));
                             }
 
+                            if let Ok(value) = word.parse::<i16>() {
+                                first_bound = value;
+                            } else {
+                                unreachable!()
+                            }
+
                             state = State::SecondRangeBeginValue;
                         } else {
                             return Err(LexerError::syntax_error(
@@ -434,6 +461,18 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if is_integer(word) {
                             if !is_integer_in_range(word) {
                                 return Err(LexerError::integer_out_of_range(tok.position, word));
+                            }
+
+                            if let Ok(value) = word.parse::<i16>() {
+                                if value <= first_bound {
+                                    return Err(LexerError::semantic_error(
+                                        tok.position,
+                                        format!("first bound of range should be less than second")
+                                            .as_str(),
+                                    ));
+                                }
+                            } else {
+                                unreachable!()
                             }
 
                             state = State::SecondRangeEndValue;
