@@ -38,7 +38,7 @@ impl Token {
     }
 }
 
-const KEYWORDS: [&'static str; 6] = ["byte", "word", "integer", "real", "char", "double"];
+const SIMPLE_TYPES: [&'static str; 6] = ["byte", "word", "integer", "real", "char", "double"];
 
 pub fn tokenize(content: String) -> Result<Vec<Token>, LexerError> {
     let mut tokens: Vec<Token> = vec![];
@@ -181,10 +181,22 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
     #[derive(Debug, PartialEq)]
     enum State {
         Start,
-        List,
-        Identifiers,
+        Definition,
+        Identifier,
         Type,
-        TypeDelimiter,
+        SimpleType,
+        Array,
+        RangesStart,
+        RangesEnd,
+        FirstRangeBeginValue,
+        FirstRangeDelimiter,
+        FirstRangeEndValue,
+        RangesDelimiter,
+        SecondRangeBeginValue,
+        SecondRangeDelimiter,
+        SecondRangeEndValue,
+        Of,
+        ArrayType,
         Error,
         Finish,
     }
@@ -200,7 +212,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                 match state {
                     State::Start => {
                         if tok.word == "var" {
-                            state = State::List;
+                            state = State::Definition;
                         } else {
                             return Err(LexerError::new(
                                 tok.position,
@@ -209,9 +221,9 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             ));
                         }
                     }
-                    State::List => {
+                    State::Definition => {
                         if is_identifier(&tok.word) {
-                            state = State::Identifiers;
+                            state = State::Identifier;
                         } else {
                             return Err(LexerError::new(
                                 tok.position,
@@ -223,9 +235,9 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             ));
                         }
                     }
-                    State::Identifiers => {
+                    State::Identifier => {
                         if tok.word == "," {
-                            state = State::List
+                            state = State::Definition
                         } else if tok.word == ":" {
                             state = State::Type;
                         } else {
@@ -240,8 +252,8 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         }
                     }
                     State::Type => {
-                        if is_type_keyword(&tok.word) {
-                            state = State::TypeDelimiter;
+                        if is_simple_type(&tok.word) {
+                            state = State::SimpleType;
                         } else if tok.word == "array" {
                             todo!()
                         } else {
@@ -255,9 +267,9 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             ));
                         }
                     }
-                    State::TypeDelimiter => {
+                    State::SimpleType => {
                         if tok.word == "," {
-                            state = State::List;
+                            state = State::Definition;
                         } else if tok.word == ";" {
                             state = State::Finish;
                         } else {
@@ -290,8 +302,8 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
     Ok(())
 }
 
-fn is_type_keyword(s: &str) -> bool {
-    for kw in KEYWORDS.iter() {
+fn is_simple_type(s: &str) -> bool {
+    for kw in SIMPLE_TYPES.iter() {
         if *kw == s {
             return true;
         }
