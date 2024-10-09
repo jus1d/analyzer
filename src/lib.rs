@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, fmt};
+use std::fmt;
 
 #[derive(Debug)]
 pub struct LexerError {
@@ -38,7 +38,7 @@ impl Token {
     }
 }
 
-const Keywords: [&'static str; 6] = ["byte", "word", "integer", "real", "char", "double"];
+const KEYWORDS: [&'static str; 6] = ["byte", "word", "integer", "real", "char", "double"];
 
 pub fn tokenize(content: String) -> Result<Vec<Token>, LexerError> {
     let mut tokens: Vec<Token> = vec![];
@@ -283,7 +283,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
 }
 
 fn is_type_keyword(s: &str) -> bool {
-    for kw in Keywords.iter() {
+    for kw in KEYWORDS.iter() {
         if *kw == s {
             return true;
         }
