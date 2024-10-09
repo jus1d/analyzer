@@ -274,7 +274,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                     _ => {}
                 }
             }
-            None => todo!(),
+            None => panic!(),
         }
         i += 1;
     }
