@@ -232,7 +232,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             return Err(LexerError::new(
                                 tok.position,
                                 format!(
-                                    "unexpected token: `{}` should be a valid identifier",
+                                    "unexpected token: `{}` should be either comma or colon",
                                     tok.word
                                 )
                                 .as_str(),
@@ -274,7 +274,15 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                     _ => {}
                 }
             }
-            None => panic!(),
+            None => {
+                if let Some(last) = tokens.get(tokens.len() - 1) {
+                    return Err(LexerError::new(
+                        last.position + last.word.len(),
+                        "expected semicolon at the end",
+                    ));
+                }
+                panic!();
+            }
         }
         i += 1;
     }
