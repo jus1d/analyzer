@@ -236,250 +236,278 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
     let mut state = State::Start;
     let mut i: usize = 0;
 
+    let mut collecting_array_type = false;
+    let mut array_type = String::new();
+
     while (state != State::Error) && (state != State::Finish) {
         match tokens.get(i) {
-            Some(tok) => match state {
-                State::Start => {
-                    if tok.word == "var" {
-                        state = State::Definition;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("expected `var`, found `{}`", tok.word).as_str(),
-                        ));
-                    }
+            Some(tok) => {
+                if collecting_array_type {
+                    array_type.push_str(&tok.word);
                 }
-                State::Definition => {
-                    if is_identifier(&tok.word) {
-                        if tok.word.len() > MAX_IDENTIFIER_LENGTH {
-                            return Err(LexerError::semantic_error(
+
+                match state {
+                    State::Start => {
+                        if tok.word == "var" {
+                            state = State::Definition;
+                        } else {
+                            return Err(LexerError::syntax_error(
                                 tok.position,
-                                "identifier can't be longer than 8 characters",
+                                format!("expected `var`, found `{}`", tok.word).as_str(),
                             ));
                         }
-                        if is_keyword(&tok.word) {
-                            return Err(LexerError::semantic_error(
+                    }
+                    State::Definition => {
+                        if is_identifier(&tok.word) {
+                            if tok.word.len() > MAX_IDENTIFIER_LENGTH {
+                                return Err(LexerError::semantic_error(
+                                    tok.position,
+                                    "identifier can't be longer than 8 characters",
+                                ));
+                            }
+                            if is_keyword(&tok.word) {
+                                return Err(LexerError::semantic_error(
+                                    tok.position,
+                                    "identifier can't reserved word: var, real, double, etc.",
+                                ));
+                            }
+
+                            if !pending_identifiers.insert(String::from(&tok.word))
+                                || identifiers.contains_key(&tok.word)
+                            {
+                                return Err(LexerError::semantic_error(
+                                    tok.position,
+                                    format!("identifier `{}` already taken", tok.word).as_str(),
+                                ));
+                            }
+
+                            state = State::Identifier;
+                        } else {
+                            return Err(LexerError::syntax_error(
                                 tok.position,
-                                "identifier can't reserved word: var, real, double, etc.",
+                                format!("`{}` should be a valid identifier", tok.word).as_str(),
                             ));
                         }
-
-                        if !pending_identifiers.insert(String::from(&tok.word))
-                            || identifiers.contains_key(&tok.word)
-                        {
-                            return Err(LexerError::semantic_error(
+                    }
+                    State::Identifier => {
+                        if tok.word == "," {
+                            state = State::Definition
+                        } else if tok.word == ":" {
+                            state = State::Type;
+                        } else {
+                            return Err(LexerError::syntax_error(
                                 tok.position,
-                                format!("identifier `{}` already taken", tok.word).as_str(),
+                                format!("`{}` should be either comma or colon", tok.word).as_str(),
                             ));
                         }
-
-                        state = State::Identifier;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("`{}` should be a valid identifier", tok.word).as_str(),
-                        ));
                     }
-                }
-                State::Identifier => {
-                    if tok.word == "," {
-                        state = State::Definition
-                    } else if tok.word == ":" {
-                        state = State::Type;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("`{}` should be either comma or colon", tok.word).as_str(),
-                        ));
-                    }
-                }
-                State::Type => {
-                    if is_simple_type(&tok.word) {
-                        for identifier in pending_identifiers.iter() {
-                            identifiers.insert(identifier.clone(), tok.word.clone());
-                        }
+                    State::Type => {
+                        if is_simple_type(&tok.word) {
+                            for identifier in pending_identifiers.iter() {
+                                identifiers.insert(identifier.clone(), tok.word.clone());
+                            }
 
-                        pending_identifiers = HashSet::new();
+                            pending_identifiers = HashSet::new();
 
-                        state = State::SimpleType;
-                    } else if tok.word == "array" {
-                        for identifier in pending_identifiers.iter() {
-                            identifiers.insert(identifier.clone(), tok.word.clone());
-                        }
+                            state = State::SimpleType;
+                        } else if tok.word == "array" {
+                            collecting_array_type = true;
+                            array_type.push_str(&tok.word);
 
-                        pending_identifiers = HashSet::new();
-
-                        state = State::Array;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!(
+                            state = State::Array;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!(
                                 "`{}` should be a valid type keyword: byte, word, integer, etc.",
                                 tok.word
                             )
-                            .as_str(),
-                        ));
-                    }
-                }
-                State::SimpleType => {
-                    if tok.word == "," {
-                        state = State::Definition;
-                    } else if tok.word == ";" {
-                        state = State::Finish;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("`{}` should be either comma or semicolon", tok.word).as_str(),
-                        ));
-                    }
-                }
-                State::Array => {
-                    if tok.word == "[" {
-                        state = State::RangesStart;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("expected `[`, found `{}`", tok.word).as_str(),
-                        ));
-                    }
-                }
-                State::RangesStart => {
-                    if tok.word == "]" {
-                        state = State::RangesEnd;
-                    } else if is_integer(&tok.word) {
-                        if !is_integer_in_range(&tok.word) {
-                            return Err(LexerError::integer_out_of_range(tok.position, &tok.word));
-                        }
-                        state = State::FirstRangeBeginValue;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("expected `]` or integer constant, found `{}`", tok.word)
                                 .as_str(),
-                        ));
-                    }
-                }
-                State::FirstRangeBeginValue => {
-                    if tok.word == ":" {
-                        state = State::FirstRangeDelimiter;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("expected `:`, found `{}`", tok.word).as_str(),
-                        ));
-                    }
-                }
-                State::FirstRangeDelimiter => {
-                    if is_integer(&tok.word) {
-                        if !is_integer_in_range(&tok.word) {
-                            return Err(LexerError::integer_out_of_range(tok.position, &tok.word));
+                            ));
                         }
-
-                        state = State::FirstRangeEndValue;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!(
-                                "unexpected token: expected integer constant, found `{}`",
-                                tok.word
-                            )
-                            .as_str(),
-                        ));
                     }
-                }
-                State::FirstRangeEndValue => {
-                    if tok.word == "," {
-                        state = State::RangesDelimiter;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("unexpected token: expected `,`, found `{}`", tok.word)
+                    State::SimpleType => {
+                        if tok.word == "," {
+                            state = State::Definition;
+                        } else if tok.word == ";" {
+                            state = State::Finish;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!("`{}` should be either comma or semicolon", tok.word)
+                                    .as_str(),
+                            ));
+                        }
+                    }
+                    State::Array => {
+                        if tok.word == "[" {
+                            state = State::RangesStart;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!("expected `[`, found `{}`", tok.word).as_str(),
+                            ));
+                        }
+                    }
+                    State::RangesStart => {
+                        if tok.word == "]" {
+                            state = State::RangesEnd;
+                        } else if is_integer(&tok.word) {
+                            if !is_integer_in_range(&tok.word) {
+                                return Err(LexerError::integer_out_of_range(
+                                    tok.position,
+                                    &tok.word,
+                                ));
+                            }
+                            state = State::FirstRangeBeginValue;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!("expected `]` or integer constant, found `{}`", tok.word)
+                                    .as_str(),
+                            ));
+                        }
+                    }
+                    State::FirstRangeBeginValue => {
+                        if tok.word == ":" {
+                            state = State::FirstRangeDelimiter;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!("expected `:`, found `{}`", tok.word).as_str(),
+                            ));
+                        }
+                    }
+                    State::FirstRangeDelimiter => {
+                        if is_integer(&tok.word) {
+                            if !is_integer_in_range(&tok.word) {
+                                return Err(LexerError::integer_out_of_range(
+                                    tok.position,
+                                    &tok.word,
+                                ));
+                            }
+
+                            state = State::FirstRangeEndValue;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!(
+                                    "unexpected token: expected integer constant, found `{}`",
+                                    tok.word
+                                )
                                 .as_str(),
-                        ));
-                    }
-                }
-                State::RangesDelimiter => {
-                    if is_integer(&tok.word) {
-                        if !is_integer_in_range(&tok.word) {
-                            return Err(LexerError::integer_out_of_range(tok.position, &tok.word));
+                            ));
                         }
-
-                        state = State::SecondRangeBeginValue;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("expected integer constant, found `{}`", tok.word).as_str(),
-                        ));
                     }
-                }
-                State::SecondRangeBeginValue => {
-                    if tok.word == ":" {
-                        state = State::SecondRangeDelimiter;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("expected `:`, found `{}`", tok.word).as_str(),
-                        ));
-                    }
-                }
-                State::SecondRangeDelimiter => {
-                    if is_integer(&tok.word) {
-                        if !is_integer_in_range(&tok.word) {
-                            return Err(LexerError::integer_out_of_range(tok.position, &tok.word));
+                    State::FirstRangeEndValue => {
+                        if tok.word == "," {
+                            state = State::RangesDelimiter;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!("unexpected token: expected `,`, found `{}`", tok.word)
+                                    .as_str(),
+                            ));
                         }
+                    }
+                    State::RangesDelimiter => {
+                        if is_integer(&tok.word) {
+                            if !is_integer_in_range(&tok.word) {
+                                return Err(LexerError::integer_out_of_range(
+                                    tok.position,
+                                    &tok.word,
+                                ));
+                            }
 
-                        state = State::SecondRangeEndValue;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("expected integer constant, found `{}`", tok.word).as_str(),
-                        ));
+                            state = State::SecondRangeBeginValue;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!("expected integer constant, found `{}`", tok.word).as_str(),
+                            ));
+                        }
                     }
-                }
-                State::SecondRangeEndValue => {
-                    if tok.word == "]" {
-                        state = State::RangesEnd;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("expected `]`, found `{}`", tok.word).as_str(),
-                        ));
+                    State::SecondRangeBeginValue => {
+                        if tok.word == ":" {
+                            state = State::SecondRangeDelimiter;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!("expected `:`, found `{}`", tok.word).as_str(),
+                            ));
+                        }
                     }
-                }
-                State::RangesEnd => {
-                    if tok.word == "of" {
-                        state = State::Of;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("expected `of`, found `{}`", tok.word).as_str(),
-                        ));
+                    State::SecondRangeDelimiter => {
+                        if is_integer(&tok.word) {
+                            if !is_integer_in_range(&tok.word) {
+                                return Err(LexerError::integer_out_of_range(
+                                    tok.position,
+                                    &tok.word,
+                                ));
+                            }
+
+                            state = State::SecondRangeEndValue;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!("expected integer constant, found `{}`", tok.word).as_str(),
+                            ));
+                        }
                     }
-                }
-                State::Of => {
-                    if is_simple_type(&tok.word) {
-                        state = State::ArrayType;
-                    } else {
-                        return Err(LexerError::syntax_error(
+                    State::SecondRangeEndValue => {
+                        if tok.word == "]" {
+                            state = State::RangesEnd;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!("expected `]`, found `{}`", tok.word).as_str(),
+                            ));
+                        }
+                    }
+                    State::RangesEnd => {
+                        if tok.word == "of" {
+                            state = State::Of;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!("expected `of`, found `{}`", tok.word).as_str(),
+                            ));
+                        }
+                    }
+                    State::Of => {
+                        if is_simple_type(&tok.word) {
+                            for identifier in pending_identifiers.iter() {
+                                println!("type: {}", array_type);
+                                identifiers.insert(identifier.clone(), array_type.to_string());
+                            }
+
+                            pending_identifiers = HashSet::new();
+                            array_type = String::new();
+                            collecting_array_type = false;
+
+                            state = State::ArrayType;
+                        } else {
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected on of simple types (byte, integer, real, etc), found `{}`", tok.word).as_str(),
                             ));
+                        }
                     }
-                }
-                State::ArrayType => {
-                    if tok.word == ";" {
-                        state = State::Finish;
-                    } else if tok.word == "," {
-                        state = State::Definition;
-                    } else {
-                        return Err(LexerError::syntax_error(
-                            tok.position,
-                            format!("expected `:` or `,`, found `{}`", tok.word).as_str(),
-                        ));
+                    State::ArrayType => {
+                        if tok.word == ";" {
+                            state = State::Finish;
+                        } else if tok.word == "," {
+                            state = State::Definition;
+                        } else {
+                            return Err(LexerError::syntax_error(
+                                tok.position,
+                                format!("expected `:` or `,`, found `{}`", tok.word).as_str(),
+                            ));
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
-            },
+            }
             None => {
                 if let Some(last) = tokens.get(tokens.len() - 1) {
                     return Err(LexerError::new(
