@@ -1,5 +1,6 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::future::Pending;
 
 #[derive(Debug)]
 pub struct LexerError {
@@ -231,7 +232,8 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
         Finish,
     }
 
-    let mut identifiers: HashSet<String> = HashSet::new();
+    let mut identifiers: HashMap<String, String> = HashMap::new();
+    let mut pendingIdentifiers: HashSet<String> = HashSet::new();
     let mut state = State::Start;
     let mut i: usize = 0;
 
@@ -263,7 +265,9 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             ));
                         }
 
-                        if !identifiers.insert(String::from(&tok.word)) {
+                        if !pendingIdentifiers.insert(String::from(&tok.word))
+                            || identifiers.contains_key(&tok.word)
+                        {
                             return Err(LexerError::semantic_error(
                                 tok.position,
                                 format!("identifier `{}` already taken", tok.word).as_str(),
@@ -292,8 +296,20 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                 }
                 State::Type => {
                     if is_simple_type(&tok.word) {
+                        for identifier in pendingIdentifiers.iter() {
+                            identifiers.insert(identifier.clone(), tok.word.clone());
+                        }
+
+                        pendingIdentifiers = HashSet::new();
+
                         state = State::SimpleType;
                     } else if tok.word == "array" {
+                        for identifier in pendingIdentifiers.iter() {
+                            identifiers.insert(identifier.clone(), tok.word.clone());
+                        }
+
+                        pendingIdentifiers = HashSet::new();
+
                         state = State::Array;
                     } else {
                         return Err(LexerError::syntax_error(
@@ -476,6 +492,10 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
             }
         }
         i += 1;
+    }
+
+    for (identifier, typ) in &identifiers {
+        println!("Identifier: {}, type: {}", identifier, typ);
     }
 
     Ok(())
