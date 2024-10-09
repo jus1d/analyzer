@@ -52,8 +52,11 @@ impl Token {
     }
 }
 
-const SIMPLE_TYPES: [&'static str; 6] = ["byte", "word", "integer", "real", "char", "double"];
 const MAX_IDENTIFIER_LENGTH: usize = 8;
+const SIMPLE_TYPES: [&'static str; 6] = ["byte", "word", "integer", "real", "char", "double"];
+const KEYWORDS: [&'static str; 9] = [
+    "var", "byte", "word", "integer", "real", "char", "double", "array", "of",
+];
 
 pub fn tokenize(content: String) -> Result<Vec<Token>, LexerError> {
     let mut tokens: Vec<Token> = vec![];
@@ -239,6 +242,12 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                                 return Err(LexerError::semantic_error(
                                     tok.position,
                                     "identifier can't be longer than 8 characters",
+                                ));
+                            }
+                            if is_keyword(&tok.word) {
+                                return Err(LexerError::semantic_error(
+                                    tok.position,
+                                    "identifier can't reserved word: var, real, double, etc.",
                                 ));
                             }
 
@@ -438,6 +447,15 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
 
 fn is_simple_type(s: &str) -> bool {
     for kw in SIMPLE_TYPES.iter() {
+        if *kw == s {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn is_keyword(s: &str) -> bool {
+    for kw in KEYWORDS.iter() {
         if *kw == s {
             return true;
         }
