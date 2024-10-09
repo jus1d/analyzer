@@ -21,9 +21,16 @@ impl LexerError {
         }
     }
 
-    fn unexpected_token(position: usize, message: &str) -> Self {
+    fn syntax_error(position: usize, message: &str) -> Self {
         Self {
-            message: format!("unexpected token: {}", message),
+            message: format!("syntax_error: {}", message),
+            position,
+        }
+    }
+
+    fn semantic_error(position: usize, message: &str) -> Self {
+        Self {
+            message: format!("semantic error: {}", message),
             position,
         }
     }
@@ -46,6 +53,7 @@ impl Token {
 }
 
 const SIMPLE_TYPES: [&'static str; 6] = ["byte", "word", "integer", "real", "char", "double"];
+const MAX_IDENTIFIER_LENGTH: usize = 8;
 
 pub fn tokenize(content: String) -> Result<Vec<Token>, LexerError> {
     let mut tokens: Vec<Token> = vec![];
@@ -219,7 +227,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if tok.word == "var" {
                             state = State::Definition;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected `var`, found `{}`", tok.word).as_str(),
                             ));
@@ -227,9 +235,16 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                     }
                     State::Definition => {
                         if is_identifier(&tok.word) {
+                            if tok.word.len() > MAX_IDENTIFIER_LENGTH {
+                                return Err(LexerError::semantic_error(
+                                    tok.position,
+                                    "identifier can't be longer than 8 characters",
+                                ));
+                            }
+
                             state = State::Identifier;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("`{}` should be a valid identifier", tok.word).as_str(),
                             ));
@@ -241,7 +256,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else if tok.word == ":" {
                             state = State::Type;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("`{}` should be either comma or colon", tok.word).as_str(),
                             ));
@@ -253,7 +268,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else if tok.word == "array" {
                             state = State::Array;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("`{}` should be a valid type keyword: byte, word, integer, etc.", tok.word).as_str(),
                             ));
@@ -265,7 +280,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else if tok.word == ";" {
                             state = State::Finish;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("`{}` should be either comma or semicolon", tok.word)
                                     .as_str(),
@@ -276,7 +291,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if tok.word == "[" {
                             state = State::RangesStart;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected `[`, found `{}`", tok.word).as_str(),
                             ));
@@ -288,7 +303,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else if is_integer(&tok.word) {
                             state = State::FirstRangeBeginValue;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected `]` or integer constant, found `{}`", tok.word)
                                     .as_str(),
@@ -299,7 +314,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if tok.word == ":" {
                             state = State::FirstRangeDelimiter;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected `:`, found `{}`", tok.word).as_str(),
                             ));
@@ -309,7 +324,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if is_integer(&tok.word) {
                             state = State::FirstRangeEndValue;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!(
                                     "unexpected token: expected integer constant, found `{}`",
@@ -323,7 +338,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if tok.word == "," {
                             state = State::RangesDelimiter;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("unexpected token: expected `,`, found `{}`", tok.word)
                                     .as_str(),
@@ -334,7 +349,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if is_integer(&tok.word) {
                             state = State::SecondRangeBeginValue;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected integer constant, found `{}`", tok.word).as_str(),
                             ));
@@ -344,7 +359,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if tok.word == ":" {
                             state = State::SecondRangeDelimiter;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected `:`, found `{}`", tok.word).as_str(),
                             ));
@@ -354,7 +369,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if is_integer(&tok.word) {
                             state = State::SecondRangeEndValue;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected integer constant, found `{}`", tok.word).as_str(),
                             ));
@@ -364,7 +379,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if tok.word == "]" {
                             state = State::RangesEnd;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected `]`, found `{}`", tok.word).as_str(),
                             ));
@@ -374,7 +389,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if tok.word == "of" {
                             state = State::Of;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected `of`, found `{}`", tok.word).as_str(),
                             ));
@@ -384,7 +399,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         if is_simple_type(&tok.word) {
                             state = State::ArrayType;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected on of simple types (byte, integer, real, etc), found `{}`", tok.word).as_str(),
                             ));
@@ -396,7 +411,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else if tok.word == "," {
                             state = State::Definition;
                         } else {
-                            return Err(LexerError::unexpected_token(
+                            return Err(LexerError::syntax_error(
                                 tok.position,
                                 format!("expected `:` or `,`, found `{}`", tok.word).as_str(),
                             ));
