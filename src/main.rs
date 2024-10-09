@@ -7,25 +7,17 @@ fn main() {
     println!("Parsing: '{}'", content);
 
     match tokenize(content.clone()) {
-        Ok(tokens) => {
-            println!("Parsed {} tokens", tokens.len());
-
-            for tok in tokens.iter() {
-                println!("{:?}", tok)
+        Ok(tokens) => match analyze(tokens) {
+            Ok(()) => {
+                println!(
+                    "String `{}` is a valid Turbo Pascal var declaration",
+                    content
+                );
             }
-
-            match analyze(tokens) {
-                Ok(()) => {
-                    println!(
-                        "String `{}` is a valid Turbo Pascal var declaration",
-                        content
-                    );
-                }
-                Err(e) => {
-                    println!("{}", e)
-                }
+            Err(e) => {
+                println!("{}", e)
             }
-        }
+        },
         Err(e) => println!("{}", e),
     }
 }
