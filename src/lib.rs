@@ -1,8 +1,9 @@
-use std::fmt;
+use std::{f32::consts::PI, fmt};
 
+#[derive(Debug)]
 pub struct LexerError {
     message: String,
-    position: u8,
+    position: usize,
 }
 
 impl fmt::Display for LexerError {
@@ -13,7 +14,7 @@ impl fmt::Display for LexerError {
 
 #[allow(dead_code)]
 impl LexerError {
-    fn new(position: u8, message: &str) -> Self {
+    fn new(position: usize, message: &str) -> Self {
         Self {
             message: message.to_string(),
             position,
@@ -36,6 +37,8 @@ impl Token {
         }
     }
 }
+
+const Keywords: [&'static str; 6] = ["byte", "word", "integer", "real", "char", "double"];
 
 pub fn tokenize(content: String) -> Result<Vec<Token>, LexerError> {
     let mut tokens: Vec<Token> = vec![];
@@ -172,4 +175,118 @@ pub fn is_identifier(str: &str) -> bool {
     }
 
     return state == State::Finish && i == str.len() + 1;
+}
+
+pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
+    #[derive(Debug, PartialEq)]
+    enum State {
+        Start,
+        List,
+        Identifiers,
+        Type,
+        TypeDelimiter,
+        Error,
+        Finish,
+    }
+
+    let mut state = State::Start;
+    let mut i: usize = 0;
+
+    while (state != State::Error) && (state != State::Finish) {
+        match tokens.get(i) {
+            Some(tok) => {
+                println!("inspecting token: {}", tok.word);
+
+                match state {
+                    State::Start => {
+                        if tok.word == "var" {
+                            state = State::List;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!("unexpected token: expected `var`, found `{}`", tok.word)
+                                    .as_str(),
+                            ));
+                        }
+                    }
+                    State::List => {
+                        if is_identifier(&tok.word) {
+                            state = State::Identifiers;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!(
+                                    "unexpected token: `{}` should be a valid identifier",
+                                    tok.word
+                                )
+                                .as_str(),
+                            ));
+                        }
+                    }
+                    State::Identifiers => {
+                        if tok.word == "," {
+                            state = State::List
+                        } else if tok.word == ":" {
+                            state = State::Type;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!(
+                                    "unexpected token: `{}` should be a valid identifier",
+                                    tok.word
+                                )
+                                .as_str(),
+                            ));
+                        }
+                    }
+                    State::Type => {
+                        if is_type_keyword(&tok.word) {
+                            state = State::TypeDelimiter;
+                        } else if tok.word == "array" {
+                            todo!()
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!(
+                                    "unexpected token: `{}` should be a valid type keyword: byte, word, integer, etc.",
+                                    tok.word
+                                )
+                                .as_str(),
+                            ));
+                        }
+                    }
+                    State::TypeDelimiter => {
+                        if tok.word == "," {
+                            state = State::List;
+                        } else if tok.word == ";" {
+                            state = State::Finish;
+                        } else {
+                            return Err(LexerError::new(
+                                tok.position,
+                                format!(
+                                    "unexpected token: `{}` should be either comma or semicolon",
+                                    tok.word
+                                )
+                                .as_str(),
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None => todo!(),
+        }
+        i += 1;
+    }
+
+    Ok(())
+}
+
+fn is_type_keyword(s: &str) -> bool {
+    for kw in Keywords.iter() {
+        if *kw == s {
+            return true;
+        }
+    }
+    return false;
 }
