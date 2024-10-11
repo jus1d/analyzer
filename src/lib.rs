@@ -15,13 +15,6 @@ impl fmt::Display for LexerError {
 
 #[allow(dead_code)]
 impl LexerError {
-    fn new(position: usize, message: &str) -> Self {
-        Self {
-            message: message.to_string(),
-            position,
-        }
-    }
-
     fn syntax_error(position: usize, message: &str) -> Self {
         Self {
             message: format!("syntax_error: {}", message),
@@ -37,14 +30,14 @@ impl LexerError {
     }
 
     fn integer_out_of_range(position: usize, actual: &str) -> Self {
-        return LexerError::semantic_error(
+        LexerError::semantic_error(
             position,
             format!(
                 "integer constant should be in range [-32768, 32767], actual: {}",
                 actual
             )
             .as_str(),
-        );
+        )
     }
 }
 
@@ -243,6 +236,15 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
 
     while (state != State::Error) && (state != State::Finish) {
         match tokens.get(i) {
+            None => {
+                if let Some(last) = tokens.get(tokens.len() - 1) {
+                    return Err(LexerError::syntax_error(
+                        last.position + last.word.len(),
+                        "expected semicolon at the end",
+                    ));
+                }
+                panic!();
+            }
             Some(tok) => {
                 let word = &tok.word.clone();
                 let word_lower = &word.to_lowercase();
@@ -536,15 +538,6 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                     }
                     _ => {}
                 }
-            }
-            None => {
-                if let Some(last) = tokens.get(tokens.len() - 1) {
-                    return Err(LexerError::new(
-                        last.position + last.word.len(),
-                        "expected semicolon at the end",
-                    ));
-                }
-                panic!();
             }
         }
         i += 1;
