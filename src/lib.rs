@@ -39,6 +39,10 @@ impl LexerError {
             .as_str(),
         )
     }
+
+    pub fn pos(&self) -> usize {
+        return self.position;
+    }
 }
 
 #[allow(dead_code)]
@@ -237,13 +241,19 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
     while (state != State::Error) && (state != State::Finish) {
         match tokens.get(i) {
             None => {
+                if tokens.is_empty() {
+                    return Err(LexerError::syntax_error(
+                        0,
+                        "var declaration should starts with VAR keyword",
+                    ));
+                }
+
                 if let Some(last) = tokens.get(tokens.len() - 1) {
                     return Err(LexerError::syntax_error(
                         last.position + last.word.len(),
                         "expected semicolon at the end",
                     ));
                 }
-                panic!();
             }
             Some(tok) => {
                 let word = &tok.word.clone();
