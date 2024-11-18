@@ -1,10 +1,12 @@
 use std::collections::{HashMap, HashSet};
+use std::convert::identity;
 use std::fmt;
 
 #[derive(Debug)]
 pub struct LexerError {
     message: String,
     position: usize,
+    token_length: usize,
 }
 
 impl fmt::Display for LexerError {
@@ -15,23 +17,26 @@ impl fmt::Display for LexerError {
 
 #[allow(dead_code)]
 impl LexerError {
-    fn syntax_error(position: usize, message: &str) -> Self {
+    fn syntax_error(position: usize, token_length: usize, message: &str) -> Self {
         Self {
             message: format!("syntax_error: {}", message),
             position,
+            token_length,
         }
     }
 
-    fn semantic_error(position: usize, message: &str) -> Self {
+    fn semantic_error(position: usize, token_length: usize, message: &str) -> Self {
         Self {
             message: format!("semantic error: {}", message),
             position,
+            token_length,
         }
     }
 
     fn integer_out_of_range(position: usize, actual: &str) -> Self {
         LexerError::semantic_error(
             position,
+            actual.len(),
             format!(
                 "integer constant should be in range [-32768, 32767], actual: {}",
                 actual
@@ -42,6 +47,10 @@ impl LexerError {
 
     pub fn pos(&self) -> usize {
         return self.position;
+    }
+
+    pub fn tok_length(&self) -> usize {
+        return self.token_length;
     }
 }
 
@@ -204,7 +213,7 @@ pub fn is_identifier(str: &str) -> bool {
     return state == State::Finish && i == str.len() + 1;
 }
 
-pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
+pub fn analyze(tokens: Vec<Token>) -> Result<HashMap<String, String>, LexerError> {
     #[derive(Debug, PartialEq)]
     enum State {
         Start,
@@ -244,6 +253,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                 if tokens.is_empty() {
                     return Err(LexerError::syntax_error(
                         0,
+                        0, // TODO:
                         "var declaration should starts with VAR keyword",
                     ));
                 }
@@ -251,6 +261,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                 if let Some(last) = tokens.get(tokens.len() - 1) {
                     return Err(LexerError::syntax_error(
                         last.position + last.word.len(),
+                        1,
                         "expected semicolon at the end",
                     ));
                 }
@@ -261,6 +272,9 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
 
                 if collecting_array_type {
                     array_type.push_str(word);
+                    if word_lower == "of" {
+                        array_type.push(' ');
+                    }
                 }
 
                 match state {
@@ -270,6 +284,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("expected `var`, found `{}`", word).as_str(),
                             ));
                         }
@@ -279,21 +294,24 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                             if word.len() > MAX_IDENTIFIER_LENGTH {
                                 return Err(LexerError::semantic_error(
                                     tok.position,
+                                    tok.word.len(),
                                     "identifier can't be longer than 8 characters",
                                 ));
                             }
                             if is_keyword(word_lower) {
                                 return Err(LexerError::semantic_error(
                                     tok.position,
+                                    tok.word.len(),
                                     "identifier can't reserved word: var, real, double, etc.",
                                 ));
                             }
 
-                            if !pending_identifiers.insert(String::from(word_lower))
+                            if !pending_identifiers.insert(String::from(word))
                                 || identifiers.contains_key(word_lower)
                             {
                                 return Err(LexerError::semantic_error(
                                     tok.position,
+                                    tok.word.len(),
                                     format!("identifier `{}` already taken", word).as_str(),
                                 ));
                             }
@@ -302,6 +320,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("`{}` should be a valid identifier", word).as_str(),
                             ));
                         }
@@ -314,6 +333,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("`{}` should be either comma or colon", word).as_str(),
                             ));
                         }
@@ -335,6 +355,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!(
                                 "`{}` should be a valid type keyword: byte, word, integer, etc.",
                                 word
@@ -351,6 +372,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("`{}` should be either comma or semicolon", word).as_str(),
                             ));
                         }
@@ -361,14 +383,13 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("expected `[`, found `{}`", word).as_str(),
                             ));
                         }
                     }
                     State::RangesStart => {
-                        if word == "]" {
-                            state = State::RangesEnd;
-                        } else if is_integer(word) {
+                        if is_integer(word) {
                             if !is_integer_in_range(word) {
                                 return Err(LexerError::integer_out_of_range(tok.position, word));
                             }
@@ -383,8 +404,12 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
-                                format!("expected `]` or integer constant, found `{}`", word)
-                                    .as_str(),
+                                tok.word.len(),
+                                format!(
+                                    "expected integer constant (start of a range), found `{}`",
+                                    word
+                                )
+                                .as_str(),
                             ));
                         }
                     }
@@ -394,6 +419,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("expected `:`, found `{}`", word).as_str(),
                             ));
                         }
@@ -408,6 +434,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                                 if value <= range_left_bound {
                                     return Err(LexerError::semantic_error(
                                         tok.position,
+                                        tok.word.len(),
                                         format!("first bound of range should be less than second")
                                             .as_str(),
                                     ));
@@ -420,6 +447,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!(
                                     "unexpected token: expected integer constant, found `{}`",
                                     word
@@ -431,9 +459,12 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                     State::FirstRangeEndValue => {
                         if word == "," {
                             state = State::RangesDelimiter;
+                        } else if word == "]" {
+                            state = State::RangesEnd;
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("unexpected token: expected `,`, found `{}`", word)
                                     .as_str(),
                             ));
@@ -455,6 +486,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("expected integer constant, found `{}`", word).as_str(),
                             ));
                         }
@@ -465,6 +497,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("expected `:`, found `{}`", word).as_str(),
                             ));
                         }
@@ -479,6 +512,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                                 if value <= range_left_bound {
                                     return Err(LexerError::semantic_error(
                                         tok.position,
+                                        tok.word.len(),
                                         format!("first bound of range should be less than second")
                                             .as_str(),
                                     ));
@@ -491,6 +525,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("expected integer constant, found `{}`", word).as_str(),
                             ));
                         }
@@ -501,6 +536,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("expected `]`, found `{}`", word).as_str(),
                             ));
                         }
@@ -511,6 +547,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("expected `of`, found `{}`", word).as_str(),
                             ));
                         }
@@ -518,7 +555,6 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                     State::Of => {
                         if is_simple_type(word_lower) {
                             for identifier in pending_identifiers.iter() {
-                                println!("type: {}", array_type);
                                 identifiers.insert(identifier.clone(), array_type.to_string());
                             }
 
@@ -530,6 +566,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("expected on of simple types (byte, integer, real, etc), found `{}`", word).as_str(),
                             ));
                         }
@@ -542,6 +579,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
                         } else {
                             return Err(LexerError::syntax_error(
                                 tok.position,
+                                tok.word.len(),
                                 format!("expected `:` or `,`, found `{}`", word).as_str(),
                             ));
                         }
@@ -557,7 +595,7 @@ pub fn analyze(tokens: Vec<Token>) -> Result<(), LexerError> {
         println!("Identifier: {}, type: {}", identifier, typ);
     }
 
-    Ok(())
+    Ok(identifiers)
 }
 
 fn is_integer_in_range(s: &str) -> bool {
