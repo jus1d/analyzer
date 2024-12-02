@@ -1,8 +1,5 @@
-use analyzer::{analyze, tokenize, LexerError};
-use iced::{
-    widget::{button, column, row, text, text_input, Column, Container, Row},
-    Alignment::Center,
-};
+use analyzer::{analyze, tokenize};
+use iced::widget::{button, column, row, text, text_input, Column};
 
 #[derive(Default)]
 struct App {

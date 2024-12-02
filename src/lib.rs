@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::convert::identity;
 use std::fmt;
 
 #[derive(Debug)]
